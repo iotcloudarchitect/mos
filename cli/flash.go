@@ -31,7 +31,6 @@ import (
 	"github.com/juju/errors"
 	flag "github.com/spf13/pflag"
 
-	"github.com/mongoose-os/mos/common/fwbundle"
 	"github.com/mongoose-os/mos/cli/dev"
 	"github.com/mongoose-os/mos/cli/devutil"
 	"github.com/mongoose-os/mos/cli/flags"
@@ -42,6 +41,7 @@ import (
 	"github.com/mongoose-os/mos/cli/flash/rs14100"
 	"github.com/mongoose-os/mos/cli/flash/stm32"
 	"github.com/mongoose-os/mos/cli/ourutil"
+	"github.com/mongoose-os/mos/common/fwbundle"
 	"github.com/mongoose-os/mos/version"
 )
 
@@ -137,6 +137,13 @@ func flash(ctx context.Context, devConn dev.DevConn) error {
 		fwname = args[1]
 	}
 
+	var targetFileName string
+	var fileSize string
+	if len(args) == 4 {
+		targetFileName = args[2]
+		fileSize = args[3]
+	}
+
 	// If firmware name is given but does not end up with .zip, this is
 	// a shortcut for `mos flash esp32`. Transform that into the canonical URL
 	_, err := os.Stat(fwname)
@@ -164,7 +171,8 @@ func flash(ctx context.Context, devConn dev.DevConn) error {
 	}
 
 	port := ""
-	if fw.Platform != "stm32" && fw.Platform != "rs14100" {
+	// DEVICE IS NOT NEEDED WHEN STORING TO FIRMWARE BINARY FILE
+	if fw.Platform != "stm32" && fw.Platform != "rs14100" && targetFileName == "" && fileSize == "" {
 		port, err = devutil.GetPort()
 		if err != nil {
 			return errors.Trace(err)
@@ -187,9 +195,13 @@ func flash(ctx context.Context, devConn dev.DevConn) error {
 		espFlashOpts.KeepFS = *flags.KeepFS
 		err = espFlasher.Flash(esp.ChipESP32, fw, &espFlashOpts)
 	case "esp8266":
-		espFlashOpts.ControlPort = port
-		espFlashOpts.KeepFS = *flags.KeepFS
-		err = espFlasher.Flash(esp.ChipESP8266, fw, &espFlashOpts)
+		if targetFileName != "" && fileSize != "" {
+			err = espFlasher.FlashToFile(esp.ChipESP8266, fw, targetFileName, fileSize)
+		} else {
+			espFlashOpts.ControlPort = port
+			espFlashOpts.KeepFS = *flags.KeepFS
+			err = espFlasher.Flash(esp.ChipESP8266, fw, &espFlashOpts)
+		}
 	case "stm32":
 		// Ideally we'd like to find mounted directory corresponding to the selected port.
 		// But for now, we'll just find mountpoints that sort of look like STLink...

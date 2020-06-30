@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"math/bits"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -276,6 +277,131 @@ func writeImages(ct esp.ChipType, cfr *cfResult, images []*image, opts *esp.Flas
 			return errors.Annotatef(err, "failed to reboot into firmware")
 		}
 	}
+	return nil
+}
+
+func FlashToFile(ct esp.ChipType, fw *fwbundle.FirmwareBundle, targetFileName string, fileSize string) error {
+
+	// IN CASE FLASHING TO FILE IS REQUIRED, CALL DEDICATED FUNCTION
+	var flashParams flashParams
+	flashParams.ct = ct
+	flashParams.sizeId = getFlashSizeId(ct, fileSize)
+
+	// Only available for ESP8266
+	if ct != esp.ChipESP8266 {
+		return errors.Errorf("Save to file is only available for ESP8266!")
+	}
+
+	if ct == esp.ChipESP8266 {
+		// Based on our knowledge of flash size, adjust type=sys_params image.
+		common.Reportf("adjustSysParamsLocation: %d bytes written to file", flashParams.Size())
+		adjustSysParamsLocation(fw, flashParams.Size())
+	}
+
+	// Sort images by address
+	var images []*image
+	for _, p := range fw.Parts {
+		data, err := fw.GetPartData(p.Name)
+		if err != nil {
+			return errors.Annotatef(err, "%s: failed to get data", p.Name)
+		}
+
+		im := &image{
+			Name:         p.Name,
+			Type:         p.Type,
+			Addr:         p.Addr,
+			Data:         data,
+			ESP32Encrypt: p.ESP32Encrypt,
+		}
+		images = append(images, im)
+	}
+
+	return errors.Trace(writeImagesToFile(ct, images, targetFileName, flashParams))
+}
+
+func writeImagesToFile(ct esp.ChipType, images []*image, targetFileName string, flashParams flashParams) error {
+	var err error
+
+	// Only available for ESP8266
+	if ct != esp.ChipESP8266 {
+		return errors.Errorf("Save to file is only available for ESP8266!")
+	}
+
+	if targetFileName == "" {
+		return errors.Errorf("Target file name missing!")
+	}
+	/*
+		// CREATE TEMP FOLDER
+		err = os.RemoveAll("./temp")
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = os.Mkdir("./temp", 0700)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	*/
+	for _, im := range images {
+		if im.Addr == 0 || im.Addr == 0x1000 && len(im.Data) >= 4 && im.Data[0] == 0xe9 {
+			im.Data[2], im.Data[3] = flashParams.Bytes()
+		}
+	}
+	sort.Sort(imagesByAddr(images))
+
+	err = sanityCheckImages(ct, images, flashParams.Size(), flashSectorSize)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	var imagesToWrite []*image
+
+	for _, im := range images {
+		if im.Name == "boot" || im.Name == "fw" || im.Name == "fs" || im.Name == "sys_params" {
+			imagesToWrite = append(imagesToWrite, im)
+		}
+	}
+
+	// EVERY FLASH FILE MUST MEET THE FLASH SECTOR SIZE (OR AN MULTIPLE OF IT)
+	for _, im := range imagesToWrite {
+		common.Reportf("IMAGE '%s' AT START: %d", im.Name, len(im.Data))
+		if len(im.Data)%flashSectorSize != 0 {
+			common.Reportf("Flashsector size not correct for: %s", im.Name)
+			newData := make([]byte, len(im.Data))
+			copy(newData, im.Data)
+			paddingLen := flashSectorSize - len(im.Data)%flashSectorSize
+			for i := 0; i < paddingLen; i++ {
+				newData = append(newData, 0xff)
+			}
+			im.Data = newData
+		}
+		common.Reportf("IMAGE '%s' AT END: %d", im.Name, len(im.Data))
+	}
+
+	flashImageBin := make([]byte, 0)
+	var length uint32 = 0
+	var index uint32 = 0
+	for i := 0; i < len(imagesToWrite); i++ {
+		for j := 0; j < len(imagesToWrite[i].Data); j++ {
+			flashImageBin = append(flashImageBin, imagesToWrite[i].Data[j])
+			index++
+		}
+		common.Reportf("index: %d", index)
+		if i < len(imagesToWrite)-1 {
+			length = imagesToWrite[i+1].Addr - uint32(len(flashImageBin))
+			for j := uint32(0); j < length; j++ {
+				flashImageBin = append(flashImageBin, 0xff)
+				index++
+			}
+			common.Reportf("-index: %d", index)
+		}
+	}
+
+	f, err := os.Create(targetFileName)
+	n, err := f.Write(flashImageBin)
+	check(err)
+	defer f.Close()
+	common.Reportf("%d bytes written to file", n)
+
 	return nil
 }
 

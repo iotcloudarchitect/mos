@@ -1,44 +1,20 @@
 The Mongoose OS command line tool
 =================================
 
-## Installing on Windows
+## Flash to single binary image for ESP8266
+This fork extends the flashing capability to create a single binary firmware image for ESP8266 devices.
+It uses the same process like real flashing, but without the need of a connected device.
 
-Download and run [pre-built mos.exe](https://mongoose-os.com/downloads/mos-release/win/mos.exe).
+The intention was to create flash images which we individualize during build process and then simply flash 
+a single file without the need of mos tool in manufacturing process.
 
-## Installing on Ubuntu Linux
+Copy modified mos(.exe) to root folder of mongoose project and run it from there.
 
-Use PPA:
+./mos flash build/fw.zip <TARGET-IN-FILE> <FLASH-SIZE>
 
-```bash
-$ sudo add-apt-repository ppa:mongoose-os/mos
-$ sudo apt-get update
-$ sudo apt-get install mos
 ```
+$ ./mos flash build/fw.zip ./final.bin 32m 
 
-Note: to use the very latest version instead of the released one, the last
-command should be `sudo apt-get install mos-latest`
-
-## Installing on Arch Linux
-
-Use PKGBUILD:
-
-```bash
-$ git clone https://github.com/mongoose-os/mos
-$ cd mos/mos/archlinux_pkgbuild/mos-release/
-$ makepkg
-$ pacman -U ./mos-*.tar.xz
-```
-
-Note: to use the very latest version from the git repo, instead of the released
-one, invoke `makepkg` from `mos-tool/mos/archlinux_pkgbuild/mos-latest`.
-
-## Installing Mac OS
-
-Use homebrew:
-
-```bash
-$ brew tap cesanta/mos
-$ brew install mos
 ```
 
 ## Building manually
