@@ -16,6 +16,10 @@ Copy modified mos(.exe) to root folder of mongoose project and run it from there
 $ ./mos flash build/fw.zip ./final.bin 32m 
 
 ```
+$ esptool.py --port /dev/cu.usbserial-143240 write_flash 0x0 final.bin
+
+```
+
 
 ## Building manually
 

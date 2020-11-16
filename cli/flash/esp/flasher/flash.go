@@ -398,7 +398,7 @@ func writeImagesToFile(ct esp.ChipType, images []*image, targetFileName string, 
 
 	f, err := os.Create(targetFileName)
 	n, err := f.Write(flashImageBin)
-	check(err)
+	//check(err)
 	defer f.Close()
 	common.Reportf("%d bytes written to file", n)
 
