@@ -10,7 +10,7 @@ a single file without the need of mos tool in manufacturing process.
 
 Copy modified mos(.exe) to root folder of mongoose project and run it from there.
 
-./mos flash build/fw.zip <TARGET-IN-FILE> <FLASH-SIZE>
+./mos flash build/fw.zip TARGET-IN-FILE FLASH-SIZE
 
 ```
 $ ./mos flash build/fw.zip ./final.bin 32m 
